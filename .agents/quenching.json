@@ -9,7 +9,7 @@
       "livenessMinutes": 20
     },
     "codex": {
-      "crossReview": "auto",
+      "crossReview": "off",
       "maxUsedPercent": {
         "primary": 80,
         "secondary": 90
@@ -17,7 +17,7 @@
       "timeoutSeconds": 900,
       "model": "gpt-6-astra",
       "executor": {
-        "enabled": true,
+        "enabled": false,
         "modelSmall": "gpt-6.1-sol",
         "modelVerified": "gpt-6.1-sol",
         "modelSmallTier": "gpt-6-luna",
