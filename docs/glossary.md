@@ -41,11 +41,14 @@ real finding.
 ## Terms
 
 - **Banco de horas** — o saldo acumulado de Realizado menos Previsto, dia a dia, que substituiu a planilha de resumo.
+- **Esbarrão** — entrada de teclado/mouse mais curta que `input.minStreakSeconds` contínuos; não conta como atividade e só vira um evento `filter`.
+- **Evento** — registro de uma decisão dos detectores (tabela `event`), visto em `jornada events` e na página de depuração.
 - [gi](/docs/standards/code/optional-gi-import.md) — o PyGObject do sistema (GTK, AppIndicator, GLib, D-Bus), importado só dentro da função que o usa.
 - [JORNADA_HOME](/docs/project/local-service.md) — variável de ambiente que redireciona dados, configuração e estado para uma só pasta.
 - [MIGRATIONS](/docs/standards/code/database-migrations.md) — a lista ordenada de migrações do SQLite em `src/jornada/db.py`, aplicada por `PRAGMA user_version`.
 - **Previsto** — as horas que a jornada configurada espera para o dia (8h em dia útil por padrão; zero em feriado ou day off).
 - **Realizado** — o tempo ativo medido no dia, corrigível por lançamento manual.
+- [Regras de detecção](/docs/project/local-service.md) — as regras desta máquina (chave `detection` da tabela `meta`) que decidem o que conta como tempo ativo; valem do tick seguinte em diante.
 
 ## How to enrich
 
