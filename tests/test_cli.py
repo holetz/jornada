@@ -131,3 +131,42 @@ def test_ledger_com_dias(capsys, tmp_path):
     out = capsys.readouterr().out
     assert out.startswith("Saldo: +0h20")
     assert f"{hoje:%Y-%m-%d}   8h20  8h00  +0h20" in out
+
+
+def test_events_sem_banco(capsys):
+    assert main(["events"]) == 0
+    assert "banco ainda não criado" in capsys.readouterr().out
+
+
+def test_events_lista_do_mais_antigo_ao_mais_recente(capsys, tmp_path):
+    from jornada import events
+
+    con = db.connect(tmp_path / "data" / "jornada.db")
+    events.emit(con, 1000, "input", "filter", "esbarrão ignorado")
+    events.emit(con, 2000, "mic", "state", "microfone em uso")
+    con.close()
+    assert main(["events"]) == 0
+    linhas = capsys.readouterr().out.splitlines()
+    assert "esbarrão ignorado" in linhas[0] and "microfone em uso" in linhas[1]
+    main(["events", "--source", "mic", "-n", "5"])
+    assert "esbarrão" not in capsys.readouterr().out
+    main(["events", "--kind", "error"])
+    assert "Nenhum evento" in capsys.readouterr().out
+
+
+def test_settings_mostra_altera_e_restaura(capsys, tmp_path):
+    from jornada import events, settings
+
+    assert main(["settings"]) == 0
+    assert "input.idleSeconds = 180\n" in capsys.readouterr().out + "\n"
+    assert main(["settings", "--set", "input.idleSeconds=120", "--set", "camera.enabled=true"]) == 0
+    out = capsys.readouterr().out
+    assert "input.idleSeconds = 120   (padrão: 180)" in out
+    con = db.connect(tmp_path / "data" / "jornada.db")
+    assert settings.load(con).idle_seconds == 120
+    assert "input.idleSeconds: 180 → 120" in events.query(con, kind="config")[0]["message"]
+    con.close()
+    assert main(["settings", "--set", "input.idleSeconds=1"]) == 1
+    assert "entre 30 e 3600" in capsys.readouterr().err
+    assert main(["settings", "--reset"]) == 0
+    assert "(padrão" not in capsys.readouterr().out

@@ -49,3 +49,8 @@ def test_balance_text_com_dias(tmp_path, monkeypatch):
     dia = ledger.Day(date(2025, 10, 6), 0, 750, 0, 750, 750, ledger.Override())
     monkeypatch.setattr(ledger, "compute", lambda con: [dia])
     assert tray.balance_text(tmp_path / "j.db") == "Saldo: +12h30 (1,6 dia)"
+
+
+def test_tray_aceita_a_url_de_depuracao_sem_gtk():
+    t = tray.Tray(on_quit=lambda: None, debug_url=lambda: "http://127.0.0.1:1/debug.html?t=x")
+    assert t._debug_url().endswith("debug.html?t=x")
