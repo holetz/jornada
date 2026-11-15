@@ -49,9 +49,43 @@ bash scripts/deploy.sh --uninstall  # remove unidade e venv; os dados ficam
 ```
 
 O serviço sobe com a sessão gráfica, mostra o ícone na barra superior (rótulo, "Pausar
-rastreio", "Sair") e o systemd o religa se cair. A configuração opcional fica em
+rastreio", "Depuração e regras", "Sair") e o systemd o religa se cair. A configuração opcional fica em
 `~/.config/jornada/config.toml` (`db_path`, `start_paused`); os dados, em
 `~/.local/share/jornada/`.
+
+## Regras de detecção e eventos (depuração)
+
+O que conta como tempo ativo é decidido por regras desta máquina, guardadas no banco e aplicadas
+pelo serviço no tick seguinte (5 s), sem reiniciar. Elas valem dali em diante: nunca reescrevem
+dias já registrados.
+
+| Regra | Padrão | O que faz |
+| --- | --- | --- |
+| `input.minStreakSeconds` | 10 | teclado/mouse só conta depois de uso **contínuo** por esse tempo; a contagem começa no início da sequência. Menos que isso é um esbarrão e só vira evento. `0` conta na hora |
+| `input.streakGapSeconds` | 10 | maior pausa entre entradas que ainda mantém a sequência contínua |
+| `input.idleSeconds` | 180 | sem teclado/mouse por esse tempo, e sem microfone ou câmera, a contagem para (cortada na última entrada) |
+| `input.ignoreApps` | — | `wm_class` de apps cujo foco não conta como teclado/mouse (ex.: `spotify`) |
+| `mic.enabled`, `mic.minSeconds` | sim, 0 | microfone em uso conta mesmo sem teclado/mouse, depois desse tempo ligado |
+| `camera.enabled`, `camera.minSeconds` | não, 0 | câmera em uso (um processo com `/dev/video*` aberto, ou o PipeWire servindo a câmera) conta como o microfone |
+| `events.verbose` | não | grava também cada leitura dos detectores (muitos eventos; para depurar por pouco tempo) |
+| `events.retentionDays` | 7 | eventos mais antigos são apagados a cada hora |
+
+Cada decisão dos detectores vira um **evento**: atividade confirmada, esbarrão ignorado,
+ociosidade, microfone/câmera em uso ou ignorados por serem curtos, tela bloqueada, app em foco,
+pausa, regra alterada e falha de coletor.
+
+- **Página:** "Depuração e regras" no menu da bandeja abre `http://127.0.0.1:8765/debug.html`
+  com o estado ao vivo de cada detector, o formulário das regras e o log de eventos filtrável.
+  Como os eventos carregam títulos de janela, a página só responde com o token da bandeja.
+- **Terminal:**
+
+  ```bash
+  jornada events -n 100 [--source input] [--kind filter]   # últimos eventos
+  jornada settings                                         # regras em vigor (e o padrão de cada uma)
+  jornada settings --set input.idleSeconds=120 --set camera.enabled=true
+  jornada settings --set input.ignoreApps=spotify,steam
+  jornada settings --reset                                 # volta tudo ao padrão
+  ```
 
 ## Banco de horas
 
