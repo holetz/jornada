@@ -129,11 +129,6 @@ def settings_json(con) -> dict:
     }
 
 
-def settings_diff(antes: dict, depois: dict) -> str:
-    mudancas = [f"{k}: {antes[k]!r} → {depois[k]!r}" for k in depois if antes.get(k) != depois[k]]
-    return "; ".join(mudancas) or "sem mudanças"
-
-
 def int_param(query, nome: str, padrao: int | None = None) -> int | None:
     valor = query.get(nome, [None])[0]
     if valor in (None, ""):
@@ -313,7 +308,7 @@ class Handler(BaseHTTPRequestHandler):
             except ValueError as e:
                 raise BadRequest(str(e)) from e
         resposta = settings_json(con)
-        mensagem = f"regras alteradas pela página: {settings_diff(antes, resposta['settings'])}"
+        mensagem = f"regras alteradas pela página: {settings.diff(antes, resposta['settings'])}"
         events.emit(con, time.time(), "settings", "config", mensagem, resposta["settings"])
         self._json(resposta)
 

@@ -113,8 +113,6 @@ def events_text(args: argparse.Namespace) -> str:
 
 def settings_text(args: argparse.Namespace) -> str:
     """Mostra as regras de detecção; `--set chave=valor` e `--reset` gravam (valem no tick)."""
-    from jornada.web.server import settings_diff
-
     cfg = config.load()
     con = db.connect(cfg.db_path)
     try:
@@ -135,7 +133,7 @@ def settings_text(args: argparse.Namespace) -> str:
                 settings.reset(con)
             else:
                 settings.save(con, novo)
-            diff = settings_diff(settings.to_dict(atual), settings.to_dict(novo))
+            diff = settings.diff(settings.to_dict(atual), settings.to_dict(novo))
             events.emit(
                 con, time.time(), "settings", "config", f"regras alteradas pela CLI: {diff}"
             )

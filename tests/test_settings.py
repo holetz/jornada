@@ -101,3 +101,12 @@ def test_apply_assignments_compoe_sobre_o_atual():
     assert novo == Settings(camera_enabled=True, idle_seconds=120)
     with pytest.raises(ValueError):
         settings.apply_assignments(atual, [("mic.minSeconds", -1)])
+
+
+def test_diff_lista_so_o_que_mudou():
+    from jornada import settings as st
+
+    antes = st.to_dict(st.Settings())
+    depois = st.to_dict(st.Settings(idle_seconds=120))
+    assert st.diff(antes, depois) == "input.idleSeconds: 180 → 120"
+    assert st.diff(antes, antes) == "sem mudanças"

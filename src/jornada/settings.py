@@ -56,6 +56,12 @@ def to_dict(s: Settings) -> dict:
     return saida
 
 
+def diff(antes: dict, depois: dict) -> str:
+    """As chaves que mudaram entre dois `to_dict`, em texto para o evento `config`."""
+    mudancas = [f"{k}: {antes[k]!r} → {depois[k]!r}" for k in depois if antes.get(k) != depois[k]]
+    return "; ".join(mudancas) or "sem mudanças"
+
+
 def _coerce(chave: str, valor: object) -> object:
     _, tipo, minimo, maximo = FIELDS[chave]
     if tipo is bool:
