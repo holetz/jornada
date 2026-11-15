@@ -1,7 +1,8 @@
 """Servidor HTTP local do banco de horas: API JSON + página estática, só em 127.0.0.1.
 
 Escritas exigem o cabeçalho `X-Jornada-Token`; o token chega à página por cookie quando a
-bandeja abre `/?t=<token>`.
+bandeja abre uma página com `?t=<token>`. Capturas, eventos, estado ao vivo e regras de detecção
+só são lidos com o token, porque carregam telas e títulos de janela.
 """
 
 import json
@@ -10,7 +11,9 @@ import re
 import secrets
 import tempfile
 import threading
+import time
 from collections import defaultdict
+from collections.abc import Callable
 from datetime import date, timedelta
 from functools import partial
 from http import HTTPStatus
@@ -18,7 +21,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from jornada import db, ledger, metrics, paths, sheet
+from jornada import db, events, ledger, metrics, paths, settings, sheet
 from jornada.capture import store as capture_store
 
 STATIC = Path(__file__).parent / "static"
@@ -30,6 +33,7 @@ TIPOS = {
 }
 KINDS = {None, "feriado", "dayoff", "ausencia", "ajuste"}
 COOKIE = "jornada_token"
+PROTEGIDAS = ("/api/captures", "/api/events", "/api/live", "/api/settings")
 log = logging.getLogger("jornada.web")
 
 
@@ -108,11 +112,57 @@ def day_detail(con, dia: date) -> dict:
     }
 
 
+def settings_json(con) -> dict:
+    """As regras em vigor (padrões quando ilegíveis), os padrões e os limites de cada chave."""
+    try:
+        atual, erro = settings.load(con), None
+    except ValueError as e:
+        atual, erro = settings.Settings(), str(e)
+    return {
+        "settings": settings.to_dict(atual),
+        "defaults": settings.to_dict(settings.Settings()),
+        "fields": {
+            chave: {"type": tipo.__name__, "min": minimo, "max": maximo}
+            for chave, (_, tipo, minimo, maximo) in settings.FIELDS.items()
+        },
+        "error": erro,
+    }
+
+
+def int_param(query, nome: str, padrao: int | None = None) -> int | None:
+    valor = query.get(nome, [None])[0]
+    if valor in (None, ""):
+        return padrao
+    try:
+        return int(valor)
+    except ValueError as e:
+        raise BadRequest(f"{nome} inválido: {valor!r}") from e
+
+
+def float_param(query, nome: str) -> float | None:
+    valor = query.get(nome, [None])[0]
+    if valor in (None, ""):
+        return None
+    try:
+        return float(valor)
+    except ValueError as e:
+        raise BadRequest(f"{nome} inválido: {valor!r}") from e
+
+
 class Handler(BaseHTTPRequestHandler):
-    def __init__(self, *args, db_path: Path, token: str, captures_dir: Path, **kwargs):
+    def __init__(
+        self,
+        *args,
+        db_path: Path,
+        token: str,
+        captures_dir: Path,
+        live: Callable[[], dict] | None = None,
+        **kwargs,
+    ):
         self.db_path = db_path
         self.captures_dir = captures_dir
         self.token = token
+        self.live = live
         super().__init__(*args, **kwargs)
 
     def log_message(self, format, *args):
@@ -192,9 +242,15 @@ class Handler(BaseHTTPRequestHandler):
 
     def _route(self, metodo, caminho, query, con, url) -> None:
         hoje = date.today()  # noqa: DTZ011 - dia local
-        capturas = caminho == "/api/captures" or caminho.startswith("/captures/")
-        if capturas and metodo == "GET" and not self._read_token_ok():
+        protegida = caminho in PROTEGIDAS or caminho.startswith("/captures/")
+        if protegida and metodo == "GET" and not self._read_token_ok():
             return self._json({"error": "token"}, HTTPStatus.FORBIDDEN)
+        if caminho == "/api/settings":
+            return self._json(settings_json(con)) if metodo == "GET" else self._put_settings(con)
+        if metodo == "GET" and caminho == "/api/events":
+            return self._events(con, query)
+        if metodo == "GET" and caminho == "/api/live":
+            return self._json(self.live() if self.live else {"available": False})
         if metodo == "GET" and caminho == "/api/captures":
             return self._captures(query.get("date", [""])[0])
         if metodo == "GET" and (m := re.fullmatch(r"/captures/([^/]+)/([^/]+)", caminho)):
@@ -222,6 +278,39 @@ class Handler(BaseHTTPRequestHandler):
         if metodo == "GET" and caminho == "/api/export.xlsx":
             return self._export(con)
         self._json({"error": "não encontrado"}, HTTPStatus.NOT_FOUND)
+
+    def _events(self, con, query) -> None:
+        tipo = query.get("kind", [None])[0] or None
+        if tipo is not None and tipo not in events.KINDS:
+            raise BadRequest(f"kind inválido: {tipo!r}")
+        self._json(
+            events.query(
+                con,
+                limit=int_param(query, "limit", 200),
+                source=query.get("source", [None])[0] or None,
+                kind=tipo,
+                before=float_param(query, "before"),
+                since=float_param(query, "since"),
+            )
+        )
+
+    def _put_settings(self, con) -> None:
+        """Corpo: as regras (chaves ausentes voltam ao padrão), ou `{"reset": true}`."""
+        corpo = self._body()
+        if not isinstance(corpo, dict):
+            raise BadRequest("esperado um objeto")
+        antes = settings_json(con)["settings"]
+        if corpo.get("reset") is True:
+            settings.reset(con)
+        else:
+            try:
+                settings.save(con, settings.validate(corpo))
+            except ValueError as e:
+                raise BadRequest(str(e)) from e
+        resposta = settings_json(con)
+        mensagem = f"regras alteradas pela página: {settings.diff(antes, resposta['settings'])}"
+        events.emit(con, time.time(), "settings", "config", mensagem, resposta["settings"])
+        self._json(resposta)
 
     def _put_day(self, con, dia: date) -> None:
         corpo = self._body()
@@ -282,20 +371,25 @@ class Handler(BaseHTTPRequestHandler):
         if STATIC.resolve() not in arquivo.parents or not arquivo.is_file():
             return self._json({"error": "não encontrado"}, HTTPStatus.NOT_FOUND)
         extra = {}
-        if caminho == "/" and query.get("t", [None])[0] == self.token:
+        if arquivo.suffix == ".html" and query.get("t", [None])[0] == self.token:
             extra["Set-Cookie"] = f"{COOKIE}={self.token}; Path=/; SameSite=Strict"
         tipo = TIPOS.get(arquivo.suffix, "application/octet-stream")
         self._send(200, arquivo.read_bytes(), f"{tipo}; charset=utf-8", extra)
 
 
 def make_server(
-    db_path: Path, port: int, token: str, captures_dir: Path | None = None
+    db_path: Path,
+    port: int,
+    token: str,
+    captures_dir: Path | None = None,
+    live: Callable[[], dict] | None = None,
 ) -> ThreadingHTTPServer:
     handler = partial(
         Handler,
         db_path=db_path,
         token=token,
         captures_dir=captures_dir or paths.captures_dir(),
+        live=live,
     )
     return ThreadingHTTPServer(("127.0.0.1", port), handler)
 
@@ -303,21 +397,37 @@ def make_server(
 class WebServer:
     """Componente do app: o servidor numa thread do processo."""
 
-    def __init__(self, db_path: Path, port: int, captures_dir: Path | None = None) -> None:
+    def __init__(
+        self,
+        db_path: Path,
+        port: int,
+        captures_dir: Path | None = None,
+        live: Callable[[], dict] | None = None,
+    ) -> None:
         self._captures_dir = captures_dir
+        self._live = live
         self.token = secrets.token_urlsafe(24)
         self._db_path = db_path
         self._port = port
         self._server: ThreadingHTTPServer | None = None
 
+    def page_url(self, pagina: str = "") -> str:
+        porta = self._server.server_address[1] if self._server else self._port
+        return f"http://127.0.0.1:{porta}/{pagina}?t={self.token}"
+
     @property
     def url(self) -> str:
-        porta = self._server.server_address[1] if self._server else self._port
-        return f"http://127.0.0.1:{porta}/?t={self.token}"
+        return self.page_url()
+
+    @property
+    def debug_url(self) -> str:
+        return self.page_url("debug.html")
 
     def start(self) -> None:
         try:
-            self._server = make_server(self._db_path, self._port, self.token, self._captures_dir)
+            self._server = make_server(
+                self._db_path, self._port, self.token, self._captures_dir, self._live
+            )
         except OSError:
             log.exception(
                 "porta %s indisponível; a tela do banco de horas fica desligada", self._port

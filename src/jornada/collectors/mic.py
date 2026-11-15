@@ -1,16 +1,14 @@
 """Microfone em uso: nó Stream/Input/Audio `running` no pw-dump (fallback /proc/asound).
 
-Portado do antigo work-tracking. O `pw-dump` é pesado: o componente chama este coletor a cada 15 s.
+Portado do antigo work-tracking. O `pw-dump` é pesado: o componente lê a cada 15 s e divide a
+saída com a câmera; a duração mínima é de `jornada.detect.Sustained`.
 """
 
 import json
 import logging
-import sqlite3
 import subprocess
 from collections.abc import Callable
 from pathlib import Path
-
-from jornada import spans
 
 log = logging.getLogger("jornada.mic")
 SOURCE = "mic"
@@ -50,11 +48,3 @@ def is_active(pw_dump: Callable[[], str] = run_pw_dump, proc: Callable[[], bool]
     except (OSError, subprocess.TimeoutExpired, ValueError) as e:
         log.warning("pw-dump falhou (%s); usando /proc/asound", e)
         return proc()
-
-
-def make(pw_dump: Callable[[], str] = run_pw_dump, proc: Callable[[], bool] = running_in_proc):
-    def poll(con: sqlite3.Connection, now: float) -> None:
-        ativo = is_active(pw_dump, proc)
-        spans.record(con, SOURCE, "active" if ativo else "inactive", now, max_gap=MAX_GAP)
-
-    return poll

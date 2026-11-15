@@ -89,3 +89,12 @@ def test_today_le_do_banco_e_acha_o_inicio(tmp_path):
     assert segundos == 3600
     assert desde == datetime(2026, 11, 3, 8, 3, tzinfo=SP)
     assert metrics.today(con, agora=ts(15, dia=date(2026, 11, 5)), tz=SP) == (0, None)
+
+
+def test_camera_soma_como_o_microfone():
+    sp = [
+        ("input", "active", ts(9), ts(10)),
+        ("camera", "active", ts(9, 30), ts(11)),
+        ("camera", "inactive", ts(11), ts(12)),
+    ]
+    assert metrics.active_seconds(sp, DIA, SP) == 2 * 3600

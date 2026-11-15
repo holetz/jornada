@@ -23,9 +23,12 @@ def parse(saida: str) -> dict[str, str] | None:
 
 
 def make(call: Callable[..., str]):
-    """Falha da chamada (extensão fora, tela bloqueada) é estado normal: não loga a cada tick."""
+    """Falha da chamada (extensão fora, tela bloqueada) é estado normal: não loga a cada tick.
 
-    def poll(con: sqlite3.Connection, now: float) -> None:
+    O poll devolve o foco gravado (`{"app", "title"}`).
+    """
+
+    def poll(con: sqlite3.Connection, now: float) -> dict[str, str]:
         try:
             dados = parse(
                 call(
@@ -36,6 +39,8 @@ def make(call: Callable[..., str]):
             )
         except OSError:
             dados = None
-        spans.record(con, SOURCE, "focus", now, DESCONHECIDA if dados is None else dados)
+        foco = DESCONHECIDA if dados is None else dados
+        spans.record(con, SOURCE, "focus", now, foco)
+        return foco
 
     return poll

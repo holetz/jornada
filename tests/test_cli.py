@@ -102,8 +102,10 @@ def test_collector_tick_grava_pausa_e_atualiza_bandeja(tmp_path):
     t = FakeTray()
     c = Collector(caminho, t, call)
     c._con = db.connect(caminho)
-    c._polls = [p for p in c._polls if p[0] != "mic"]
-    c.tick(time.time())
+    c._polls = [p for p in c._polls if p[0] not in ("mic", "camera")]
+    agora = time.time()
+    for i in range(3):  # idletime 0 em três ticks: 10 s de atividade contínua confirmam
+        c.tick(agora + 5 * i)
     fontes = {r[0] for r in c._con.execute("SELECT source FROM span")}
     assert {"input", "lock", "window", "pause"} <= fontes
     assert t.hoje is not None and t.active is True
@@ -129,3 +131,42 @@ def test_ledger_com_dias(capsys, tmp_path):
     out = capsys.readouterr().out
     assert out.startswith("Saldo: +0h20")
     assert f"{hoje:%Y-%m-%d}   8h20  8h00  +0h20" in out
+
+
+def test_events_sem_banco(capsys):
+    assert main(["events"]) == 0
+    assert "banco ainda não criado" in capsys.readouterr().out
+
+
+def test_events_lista_do_mais_antigo_ao_mais_recente(capsys, tmp_path):
+    from jornada import events
+
+    con = db.connect(tmp_path / "data" / "jornada.db")
+    events.emit(con, 1000, "input", "filter", "esbarrão ignorado")
+    events.emit(con, 2000, "mic", "state", "microfone em uso")
+    con.close()
+    assert main(["events"]) == 0
+    linhas = capsys.readouterr().out.splitlines()
+    assert "esbarrão ignorado" in linhas[0] and "microfone em uso" in linhas[1]
+    main(["events", "--source", "mic", "-n", "5"])
+    assert "esbarrão" not in capsys.readouterr().out
+    main(["events", "--kind", "error"])
+    assert "Nenhum evento" in capsys.readouterr().out
+
+
+def test_settings_mostra_altera_e_restaura(capsys, tmp_path):
+    from jornada import events, settings
+
+    assert main(["settings"]) == 0
+    assert "input.idleSeconds = 180\n" in capsys.readouterr().out + "\n"
+    assert main(["settings", "--set", "input.idleSeconds=120", "--set", "camera.enabled=true"]) == 0
+    out = capsys.readouterr().out
+    assert "input.idleSeconds = 120   (padrão: 180)" in out
+    con = db.connect(tmp_path / "data" / "jornada.db")
+    assert settings.load(con).idle_seconds == 120
+    assert "input.idleSeconds: 180 → 120" in events.query(con, kind="config")[0]["message"]
+    con.close()
+    assert main(["settings", "--set", "input.idleSeconds=1"]) == 1
+    assert "entre 30 e 3600" in capsys.readouterr().err
+    assert main(["settings", "--reset"]) == 0
+    assert "(padrão" not in capsys.readouterr().out

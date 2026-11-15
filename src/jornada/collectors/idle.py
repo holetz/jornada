@@ -1,11 +1,11 @@
-"""Entrada ativa/ociosa pelo IdleMonitor do Mutter, com corte retroativo."""
+"""Tempo ocioso de teclado/mouse pelo IdleMonitor do Mutter.
 
-import sqlite3
+Este módulo só lê; a decisão do que conta (sequência contínua, ociosidade, apps ignorados) é de
+`jornada.detect.InputDetector`.
+"""
+
 from collections.abc import Callable
 
-from jornada import spans
-
-IDLE_SECONDS = 180.0
 SOURCE = "input"
 
 
@@ -17,27 +17,12 @@ def parse_idletime(saida: str) -> float | None:
         return None
 
 
-def apply(con: sqlite3.Connection, now: float, idletime: float, idle_seconds: float = IDLE_SECONDS):
-    """Grava a leitura: ativo estende `active`; ocioso corta o `active` em `now - idletime`."""
-    if idletime < idle_seconds:
-        spans.record(con, SOURCE, "active", now)
-        return
-    inicio = now - idletime
-    spans.cut(con, SOURCE, "active", inicio)
-    spans.record(con, SOURCE, "idle", now, start=inicio)
-
-
-def make(call: Callable[..., str], idle_seconds: float = IDLE_SECONDS):
-    """Coletor: `call(dest, path, method)` devolve a saída do gdbus."""
-
-    def poll(con: sqlite3.Connection, now: float) -> None:
-        saida = call(
+def read(call: Callable[..., str]) -> float | None:
+    """Segundos desde a última entrada; `call(dest, path, method)` devolve a saída do gdbus."""
+    return parse_idletime(
+        call(
             "org.gnome.Mutter.IdleMonitor",
             "/org/gnome/Mutter/IdleMonitor/Core",
             "org.gnome.Mutter.IdleMonitor.GetIdletime",
         )
-        idletime = parse_idletime(saida)
-        if idletime is not None:
-            apply(con, now, idletime, idle_seconds)
-
-    return poll
+    )

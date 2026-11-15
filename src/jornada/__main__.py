@@ -1,14 +1,16 @@
-"""Ponto de entrada do comando `jornada`: run, status, today, import, version."""
+"""Ponto de entrada do comando `jornada`: run, status, today, sheet, ledger, events, settings."""
 
 import argparse
+import json
 import logging
 import shutil
 import subprocess
 import sys
-from datetime import date
+import time
+from datetime import date, datetime
 from pathlib import Path
 
-from jornada import __version__, config, db, ledger, metrics, paths, sheet
+from jornada import __version__, config, db, events, ledger, metrics, paths, settings, sheet
 from jornada.tray import today_line
 
 EXTENSAO_APPINDICATOR = "ubuntu-appindicators@ubuntu.com"
@@ -89,6 +91,63 @@ def sheet_text(args: argparse.Namespace) -> str:
         con.close()
 
 
+def events_text(args: argparse.Namespace) -> str:
+    """Os últimos eventos dos detectores, do mais antigo ao mais recente."""
+    cfg = config.load()
+    if not cfg.db_path.exists():
+        return "Eventos: — (banco ainda não criado)"
+    con = db.connect(cfg.db_path)
+    try:
+        lista = events.query(con, limit=args.n, source=args.source, kind=args.kind)
+    finally:
+        con.close()
+    if not lista:
+        return "Nenhum evento (o serviço novo já rodou?)"
+    tz = metrics.local_tz()
+    return "\n".join(
+        f"{datetime.fromtimestamp(e['ts'], tz):%Y-%m-%d %H:%M:%S}  {e['source']:<8} "
+        f"{e['kind']:<7} {e['message']}"
+        for e in reversed(lista)
+    )
+
+
+def settings_text(args: argparse.Namespace) -> str:
+    """Mostra as regras de detecção; `--set chave=valor` e `--reset` gravam (valem no tick)."""
+    cfg = config.load()
+    con = db.connect(cfg.db_path)
+    try:
+        try:
+            atual = settings.load(con)
+        except ValueError as e:
+            print(f"aviso: regras gravadas inválidas, valendo os padrões ({e})", file=sys.stderr)
+            atual = settings.Settings()
+        if args.reset or args.set:
+            novo = (
+                settings.Settings()
+                if args.reset
+                else settings.apply_assignments(
+                    atual, [settings.parse_assignment(a) for a in args.set]
+                )
+            )
+            if args.reset:
+                settings.reset(con)
+            else:
+                settings.save(con, novo)
+            diff = settings.diff(settings.to_dict(atual), settings.to_dict(novo))
+            events.emit(
+                con, time.time(), "settings", "config", f"regras alteradas pela CLI: {diff}"
+            )
+            atual = novo
+    finally:
+        con.close()
+    padrao = settings.to_dict(settings.Settings())
+    linhas = []
+    for chave, valor in settings.to_dict(atual).items():
+        marca = "" if valor == padrao[chave] else f"   (padrão: {padrao[chave]})"
+        linhas.append(f"{chave} = {json.dumps(valor, ensure_ascii=False)}{marca}")
+    return "\n".join(linhas)
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="jornada")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -104,6 +163,19 @@ def build_parser() -> argparse.ArgumentParser:
     p_exp.add_argument("--de", type=date.fromisoformat, help="primeiro dia (AAAA-MM-DD)")
     p_exp.add_argument("--ate", type=date.fromisoformat, help="último dia (AAAA-MM-DD)")
     sub.add_parser("ledger", help="mostra o saldo do banco de horas e os últimos dias")
+    ev = sub.add_parser("events", help="mostra o log de eventos dos detectores (depuração)")
+    ev.add_argument("-n", type=int, default=50, help="quantos eventos (padrão 50)")
+    ev.add_argument("--source", help="só de uma fonte (input, mic, camera, lock, window, ...)")
+    ev.add_argument("--kind", choices=events.KINDS, help="só de um tipo")
+    st = sub.add_parser("settings", help="mostra ou altera as regras de detecção desta máquina")
+    st.add_argument(
+        "--set",
+        action="append",
+        default=[],
+        metavar="CHAVE=VALOR",
+        help="ex.: input.idleSeconds=120, camera.enabled=true, input.ignoreApps=spotify,steam",
+    )
+    st.add_argument("--reset", action="store_true", help="volta todas as regras ao padrão")
     sub.add_parser("version", help="mostra a versão")
     return p
 
@@ -118,6 +190,16 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.cmd == "ledger":
         print(ledger_text())
+        return 0
+    if args.cmd == "events":
+        print(events_text(args))
+        return 0
+    if args.cmd == "settings":
+        try:
+            print(settings_text(args))
+        except ValueError as e:
+            print(f"erro: {e}", file=sys.stderr)
+            return 1
         return 0
     if args.cmd == "sheet":
         try:

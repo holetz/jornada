@@ -51,16 +51,19 @@ def run(factories: list[Callable[["App"], Component]] | None = None) -> int:
 
     loop = GLib.MainLoop()
     app = App()
-    web = WebServer(cfg.db_path, cfg.web_port)
+    # o servidor lê o estado ao vivo do coletor, criado depois (a bandeja precisa da URL)
+    web = WebServer(cfg.db_path, cfg.web_port, live=lambda: coletor.live)
     bandeja = tray.Tray(
         on_quit=loop.quit,
         start_paused=cfg.start_paused,
         db_path=cfg.db_path,
         web_url=lambda: web.url,
         capture_enabled=cfg.capture_enabled,
+        debug_url=lambda: web.debug_url,
     )
+    coletor = collectors.Collector(cfg.db_path, bandeja)
     app.register(bandeja)
-    app.register(collectors.Collector(cfg.db_path, bandeja))
+    app.register(coletor)
     if not cfg.capture_enabled:
         app.register(capture.Retention(paths.captures_dir(), cfg.capture_retention_days))
     else:

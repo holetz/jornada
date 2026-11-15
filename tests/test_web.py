@@ -3,6 +3,7 @@ import threading
 import urllib.error
 import urllib.request
 from datetime import date
+from pathlib import Path
 
 import pytest
 
@@ -191,3 +192,86 @@ def test_capturas_exigem_o_token_pelo_cookie_ou_cabecalho(api, capturas):
 )
 def test_captura_nao_sai_do_diretorio(api, capturas, caminho):
     assert api("GET", caminho)[0] in (400, 404)
+
+
+def test_regras_padrao_e_limites(api):
+    r = json_de(api("GET", "/api/settings"))
+    assert r["settings"] == r["defaults"]
+    assert r["settings"]["input.idleSeconds"] == 180
+    assert r["fields"]["input.idleSeconds"] == {"type": "int", "min": 30, "max": 3600}
+    assert r["fields"]["input.ignoreApps"]["type"] == "list"
+    assert r["error"] is None
+
+
+def test_salvar_regras_persiste_e_registra_evento(api, tmp_path):
+    corpo = {"input.idleSeconds": 120, "camera.enabled": True, "input.ignoreApps": ["spotify"]}
+    r = json_de(api("PUT", "/api/settings", corpo))
+    assert r["settings"]["input.idleSeconds"] == 120
+    assert r["settings"]["camera.enabled"] is True
+    assert r["settings"]["mic.enabled"] is True  # ausente volta ao padrão
+    assert json_de(api("GET", "/api/settings"))["settings"] == r["settings"]
+    ev = json_de(api("GET", "/api/events?kind=config"))
+    assert "input.idleSeconds: 180 → 120" in ev[0]["message"]
+    r = json_de(api("PUT", "/api/settings", {"reset": True}))
+    assert r["settings"] == r["defaults"]
+
+
+def test_regras_invalidas_sao_400_e_sem_token_403(api):
+    assert api("PUT", "/api/settings", {"input.idleSeconds": 5})[0] == 400
+    assert api("PUT", "/api/settings", {"nada": 1})[0] == 400
+    assert api("PUT", "/api/settings", [1])[0] == 400
+    assert api("PUT", "/api/settings", {"input.idleSeconds": 120}, token=None)[0] == 403
+    assert api("GET", "/api/settings", token=None)[0] == 403
+
+
+def test_eventos_exigem_token_e_filtram(api, tmp_path):
+    from jornada import events
+
+    con = db.connect(tmp_path / "j.db")
+    events.emit(con, 100, "input", "filter", "esbarrão ignorado")
+    events.emit(con, 200, "mic", "state", "microfone em uso")
+    con.close()
+    assert api("GET", "/api/events", token=None)[0] == 403
+    cookie = f"jornada_token={TOKEN}"
+    todos = json_de(api("GET", "/api/events", token=None, cookie=cookie))
+    assert [e["message"] for e in todos] == ["microfone em uso", "esbarrão ignorado"]
+    assert len(json_de(api("GET", "/api/events?source=input"))) == 1
+    assert len(json_de(api("GET", "/api/events?before=200"))) == 1
+    assert len(json_de(api("GET", "/api/events?limit=1"))) == 1
+    assert api("GET", "/api/events?kind=nada")[0] == 400
+    assert api("GET", "/api/events?limit=x")[0] == 400
+
+
+def test_estado_ao_vivo(tmp_path):
+    caminho = tmp_path / "j.db"
+    db.connect(caminho).close()
+    srv = server.make_server(caminho, 0, TOKEN, tmp_path, live=lambda: {"counting": True})
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    base = f"http://127.0.0.1:{srv.server_address[1]}/api/live"
+    try:
+        req = urllib.request.Request(base, headers={"X-Jornada-Token": TOKEN})
+        with urllib.request.urlopen(req) as r:  # noqa: S310
+            assert json.loads(r.read()) == {"counting": True}
+        with pytest.raises(urllib.error.HTTPError):
+            urllib.request.urlopen(base)
+    finally:
+        srv.shutdown()
+        srv.server_close()
+
+
+def test_ao_vivo_sem_coletor(api):
+    assert json_de(api("GET", "/api/live")) == {"available": False}
+
+
+def test_pagina_de_depuracao_grava_o_cookie(api):
+    status, corpo, cab = api("GET", f"/debug.html?t={TOKEN}")
+    assert status == 200 and b"Regras de detec" in corpo
+    assert cab["Set-Cookie"].startswith(f"jornada_token={TOKEN}")
+    assert "Set-Cookie" not in api("GET", f"/debug.js?t={TOKEN}")[2]
+    assert api("GET", "/debug.js")[0] == 200
+
+
+def test_urls_do_servidor():
+    w = server.WebServer(Path("x.db"), 8765)
+    assert w.url == f"http://127.0.0.1:8765/?t={w.token}"
+    assert w.debug_url == f"http://127.0.0.1:8765/debug.html?t={w.token}"

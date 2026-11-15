@@ -27,7 +27,7 @@ def test_parse():
 
 def test_poll_com_extensao_funde(con):
     poll = window.make(lambda *a: SAIDA)
-    poll(con, 100.0)
+    assert poll(con, 100.0) == {"app": "code", "title": "README — jornada"}
     poll(con, 105.0)
     linhas = spans_de(con)
     assert len(linhas) == 1 and linhas[0][2:] == (100.0, 105.0)

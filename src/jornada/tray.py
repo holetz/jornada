@@ -59,10 +59,12 @@ class Tray:
         db_path: Path | None = None,
         web_url: Callable[[], str] | None = None,
         capture_enabled: bool = False,
+        debug_url: Callable[[], str] | None = None,
     ) -> None:
         self._on_quit = on_quit
         self._db_path = db_path
         self._web_url = web_url
+        self._debug_url = debug_url
         self._capture_enabled = capture_enabled
         self.capture_paused = False
         self.capture_status: str | None = None
@@ -119,6 +121,12 @@ class Tray:
         if self._web_url is not None:
             banco.connect("activate", lambda _item: open_url(self._web_url()))
         menu.append(banco)
+
+        depuracao = Gtk.MenuItem(label="Depuração e regras")
+        depuracao.set_sensitive(self._debug_url is not None)
+        if self._debug_url is not None:
+            depuracao.connect("activate", lambda _item: open_url(self._debug_url()))
+        menu.append(depuracao)
 
         menu.append(Gtk.SeparatorMenuItem())
         sair = Gtk.MenuItem(label="Sair")

@@ -38,11 +38,21 @@ def _m4_ledger(con: sqlite3.Connection) -> None:
     con.execute("INSERT INTO schedule VALUES ('2025-09-22', '[480, 480, 480, 480, 480, 0, 0]')")
 
 
+def _m5_event(con: sqlite3.Connection) -> None:
+    """Eventos dos detectores para depuração."""
+    con.execute(
+        "CREATE TABLE event (id INTEGER PRIMARY KEY, ts REAL NOT NULL, "
+        "source TEXT NOT NULL, kind TEXT NOT NULL, message TEXT NOT NULL, data TEXT)"
+    )
+    con.execute("CREATE INDEX event_ts ON event (ts)")
+
+
 MIGRATIONS: list[Callable[[sqlite3.Connection], None]] = [
     _m1_meta,
     _m2_span,
     _m3_origin,
     _m4_ledger,
+    _m5_event,
 ]
 
 
