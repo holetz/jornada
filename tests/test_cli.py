@@ -102,8 +102,10 @@ def test_collector_tick_grava_pausa_e_atualiza_bandeja(tmp_path):
     t = FakeTray()
     c = Collector(caminho, t, call)
     c._con = db.connect(caminho)
-    c._polls = [p for p in c._polls if p[0] != "mic"]
-    c.tick(time.time())
+    c._polls = [p for p in c._polls if p[0] not in ("mic", "camera")]
+    agora = time.time()
+    for i in range(3):  # idletime 0 em três ticks: 10 s de atividade contínua confirmam
+        c.tick(agora + 5 * i)
     fontes = {r[0] for r in c._con.execute("SELECT source FROM span")}
     assert {"input", "lock", "window", "pause"} <= fontes
     assert t.hoje is not None and t.active is True

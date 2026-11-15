@@ -18,7 +18,9 @@ def parse_active(saida: str) -> bool | None:
 
 
 def make(call: Callable[..., str]):
-    def poll(con: sqlite3.Connection, now: float) -> None:
+    """Grava `locked`/`unlocked` e devolve a leitura (None quando não reconhecida)."""
+
+    def poll(con: sqlite3.Connection, now: float) -> bool | None:
         ativo = parse_active(
             call(
                 "org.gnome.ScreenSaver", "/org/gnome/ScreenSaver", "org.gnome.ScreenSaver.GetActive"
@@ -26,5 +28,6 @@ def make(call: Callable[..., str]):
         )
         if ativo is not None:
             spans.record(con, SOURCE, "locked" if ativo else "unlocked", now)
+        return ativo
 
     return poll

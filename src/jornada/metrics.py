@@ -1,7 +1,7 @@
 """Tempo ativo por dia local, como união de intervalos (puro; o SQL só seleciona os spans).
 
-Ativo = (entrada ativa menos tela bloqueada) unido ao microfone em uso, recortado no dia local e
-descontada a pausa.
+Ativo = (entrada ativa menos tela bloqueada) unido ao microfone e à câmera em uso, recortado no
+dia local e descontada a pausa.
 """
 
 import sqlite3
@@ -61,7 +61,7 @@ def active_intervals(spans: list[Span], dia: date, tz: tzinfo | None = None) -> 
         return merge([(a, b) for s, st, a, b in spans if s == source and st == state])
 
     base = subtract(de("input", "active"), de("lock", "locked"))
-    ativo = merge(base + de("mic", "active"))
+    ativo = merge(base + de("mic", "active") + de("camera", "active"))
     ativo = subtract(ativo, de("pause", "paused"))
     return clip(ativo, *day_bounds(dia, tz))
 
