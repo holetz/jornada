@@ -26,3 +26,15 @@ input { font: inherit; width: 6rem; }
 .capturas figcaption { font-size: .75rem; opacity: .7; text-align: center; }
 #ampliada { padding: 0; border: 0; max-width: 95vw; }
 #ampliada img { display: block; max-width: 95vw; max-height: 90vh; }
+.regras { display: grid; gap: .6rem; }
+.regras .regra { display: grid; grid-template-columns: 18rem 10rem 1fr; gap: .2rem 1rem; align-items: center; }
+.regras .regra input[type=text], .regras .regra input:not([type]) { width: 10rem; }
+.regras .regra input[type=checkbox] { width: auto; justify-self: start; }
+.filtros { display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; }
+.filtros input { width: auto; }
+#eventos td.texto { text-align: left; }
+#eventos th:nth-child(n+2), #eventos td:nth-child(n+2) { text-align: left; }
+tr.evento-error td { color: #c62828; }
+tr.evento-filter td { opacity: .8; font-style: italic; }
+tr.evento-reading td { opacity: .6; }
+header nav { display: flex; gap: .5rem; }

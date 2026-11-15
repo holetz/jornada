@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Depuração e regras — jornada</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header>
+    <h1>Depuração e regras</h1>
+    <a href="/" class="botao">Banco de horas</a>
+  </header>
+  <p id="erro" class="erro" role="alert" hidden></p>
+
+  <section>
+    <h2>Agora</h2>
+    <p class="dica">Leitura de cada detector no último tick do serviço (atualiza a cada 5 s).</p>
+    <div id="agora" class="cartoes" aria-live="polite"></div>
+  </section>
+
+  <section>
+    <h2>Regras de detecção</h2>
+    <p class="dica">Valem para esta máquina a partir do próximo tick (5 s), sem reiniciar o serviço,
+      e nunca reescrevem os dias já registrados.</p>
+    <form id="regras" class="regras"></form>
+    <p>
+      <button id="salvar-regras" type="button">Salvar regras</button>
+      <button id="restaurar-regras" type="button">Restaurar padrões</button>
+      <span id="regras-status" class="dica"></span>
+    </p>
+  </section>
+
+  <section>
+    <h2>Eventos</h2>
+    <p class="filtros">
+      <label>Fonte <select id="filtro-fonte"></select></label>
+      <label>Tipo <select id="filtro-tipo"></select></label>
+      <label><input id="auto" type="checkbox" checked> atualizar sozinho</label>
+      <button id="atualizar-eventos" type="button">Atualizar</button>
+    </p>
+    <table id="eventos">
+      <thead><tr><th>Quando</th><th>Fonte</th><th>Tipo</th><th>Mensagem</th></tr></thead>
+      <tbody></tbody>
+    </table>
+    <p><button id="mais-eventos" type="button">Carregar mais antigos</button></p>
+  </section>
+  <script type="module" src="/debug.js"></script>
+</body>
+</html>
