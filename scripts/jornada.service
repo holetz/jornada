@@ -1,0 +1,13 @@
+[Unit]
+Description=jornada — rastreio do tempo de trabalho (ícone na bandeja)
+PartOf=graphical-session.target
+After=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/share/jornada/venv/bin/jornada run
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=graphical-session.target

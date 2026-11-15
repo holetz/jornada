@@ -1,0 +1,28 @@
+:root { color-scheme: light dark; font-family: system-ui, sans-serif; }
+body { margin: 0 auto; max-width: 70rem; padding: 1rem; }
+header { display: flex; justify-content: space-between; align-items: center; }
+.botao, button { padding: .4rem .8rem; border: 1px solid currentColor; border-radius: .4rem;
+  background: none; color: inherit; cursor: pointer; text-decoration: none; font: inherit; }
+.cartoes { display: grid; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); gap: 1rem; }
+.cartao { border: 1px solid #8884; border-radius: .6rem; padding: .8rem; }
+.cartao b { display: block; font-size: 1.5rem; font-variant-numeric: tabular-nums; }
+.mes { display: flex; align-items: center; gap: 1rem; }
+table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+th, td { padding: .3rem .5rem; border-bottom: 1px solid #8883; text-align: right; }
+th:first-child, td:first-child, td.texto, th:nth-child(n+8) { text-align: left; }
+tr.fim-de-semana { opacity: .6; }
+tr.futuro { opacity: .45; }
+td.editavel { cursor: text; background: #8881; }
+.positivo { color: #1a7f37; }
+.negativo { color: #c62828; }
+.erro { color: #c62828; }
+.linha { position: relative; height: 1.5rem; background: #8882; border-radius: .3rem; }
+.linha i { position: absolute; top: 0; bottom: 0; background: #1a7f37; border-radius: .2rem; }
+.dica { opacity: .7; }
+input { font: inherit; width: 6rem; }
+.capturas { display: flex; gap: .4rem; overflow-x: auto; padding: .3rem 0; }
+.capturas figure { margin: 0; flex: none; cursor: zoom-in; }
+.capturas img { display: block; height: 4.5rem; border-radius: .2rem; }
+.capturas figcaption { font-size: .75rem; opacity: .7; text-align: center; }
+#ampliada { padding: 0; border: 0; max-width: 95vw; }
+#ampliada img { display: block; max-width: 95vw; max-height: 90vh; }

@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Banco de horas</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header>
+    <h1>Banco de horas</h1>
+    <a href="/api/export.xlsx" class="botao">Exportar .xlsx</a>
+  </header>
+  <section id="cartoes" class="cartoes" aria-label="Resumo"></section>
+  <section>
+    <nav class="mes">
+      <button id="anterior" aria-label="Mês anterior">&larr;</button>
+      <h2 id="titulo-mes"></h2>
+      <button id="proximo" aria-label="Próximo mês">&rarr;</button>
+    </nav>
+    <p id="erro" class="erro" role="alert" hidden></p>
+    <table id="tabela">
+      <thead>
+        <tr>
+          <th>Data</th><th>Dia</th><th>Medido</th><th>Realizado</th><th>Previsto</th>
+          <th>Saldo do dia</th><th>Saldo acumulado</th><th>Tipo</th><th>Observação</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </section>
+  <section id="detalhe" hidden>
+    <h2 id="detalhe-titulo"></h2>
+    <div id="linha-do-tempo" class="linha"></div>
+    <h3>Capturas</h3>
+    <div id="capturas" class="capturas"></div>
+    <ol id="janelas"></ol>
+    <dialog id="ampliada"><img id="ampliada-img" alt="Captura ampliada"></dialog>
+  </section>
+  <section>
+    <h2>Jornada por período</h2>
+    <p class="dica">Minutos por dia, de segunda a domingo; vale da data até o próximo período.</p>
+    <table id="jornada"></table>
+    <button id="novo-periodo">Novo período</button>
+    <button id="salvar-jornada">Salvar jornada</button>
+  </section>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>
